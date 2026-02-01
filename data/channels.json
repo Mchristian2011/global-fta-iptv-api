@@ -1,0 +1,29 @@
+[
+  {
+    "id": 1,
+    "name": "BBC World News",
+    "country": "UK",
+    "language": "English",
+    "category": "News",
+    "stream_url": "http://stream.bbc.com/live",
+    "is_active": true
+  },
+  {
+    "id": 2,
+    "name": "France 24",
+    "country": "France",
+    "language": "French",
+    "category": "News",
+    "stream_url": "http://stream.france24.com/live",
+    "is_active": true
+  },
+  {
+    "id": 3,
+    "name": "DW",
+    "country": "Germany",
+    "language": "English",
+    "category": "Documentary",
+    "stream_url": "http://stream.dw.com/live",
+    "is_active": true
+  }
+]
