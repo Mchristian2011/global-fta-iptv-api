@@ -1,9 +1,5 @@
 fastapi
 uvicorn
-requests
-
-fastapi
-uvicorn
 sqlalchemy
 psycopg2-binary
 requests
