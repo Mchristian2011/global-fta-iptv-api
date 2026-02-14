@@ -1,26 +1,20 @@
 # -----------------------------
 # Import required modules
 # -----------------------------
-from fastapi import APIRouter, Header, HTTPException, Depends
+# WHY:
+# - APIRouter organizes endpoints into modular components
+# - Depends allows dependency injection (API key protection)
+# - HTTPException handles API errors properly
+from fastapi import Depends
+from app.core.security import verify_api_key
+from fastapi import APIRouter, HTTPException, Depends
 from typing import List
-from app.models.channel import Channel  # Pydantic model for channel
-from app.crud import get_channels_by_language, add_channel  # Import CRUD functions
-import json  # To read channel data from file
-import requests  # To validate external stream URLs
+from app.models.channel import Channel
+from app.crud import get_channels_by_language, add_channel
+from app.core.auth import verify_api_key  # 🔐 Centralized security
+import json
+import requests
 
-# -----------------------------
-# API KEY CONFIGURATION
-# -----------------------------
-API_KEY = "my_secret_api_key"  # Hardcoded secret key (for demo)
-
-def verify_api_key(x_api_key: str = Header(...)):
-    """
-    WHY THIS FUNCTION EXISTS:
-    - Validates API key sent by client
-    - If invalid, raises 401 Unauthorized
-    """
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid API Key")
 
 # -----------------------------
 # ROUTER CONFIGURATION
@@ -30,30 +24,40 @@ router = APIRouter(
     tags=["Channels"],
     dependencies=[Depends(verify_api_key)]  # 🔐 Protects ALL endpoints
 )
+
 # WHY:
-# - All channel endpoints start with /channels
-# - API key is required for every route automatically
-# - No need to repeat Depends in each endpoint
+# - All routes start with /channels
+# - API key verification applies automatically
+# - Cleaner and DRY (Don’t Repeat Yourself)
+
 
 # -----------------------------
-# LOAD CHANNEL DATA
+# LOAD CHANNEL DATA (Temporary JSON Storage)
 # -----------------------------
-# Load once at startup to avoid re-reading file on every request
+# WHY:
+# - Loaded once at startup
+# - Avoids reading file on every request
+# - Good for demo version (not production database)
 with open("data/channels.json", "r", encoding="utf-8") as file:
     channels_data = json.load(file)
-    print(f"[DEBUG] Loaded {len(channels_data)} channels")
+
 
 # -----------------------------
 # ENDPOINT: GET ALL CHANNELS
 # -----------------------------
-@router.get("/", response_model=List[Channel])
+
+
+
+
+@router.get("/", dependencies=[Depends(verify_api_key)])
 def get_all_channels():
     """
-    WHY THIS FUNCTION EXISTS:
+    PURPOSE:
     - Returns all FTA channels
     - Automatically protected by API key
     """
     return channels_data
+
 
 # -----------------------------
 # ENDPOINT: GET CHANNELS BY COUNTRY
@@ -61,18 +65,17 @@ def get_all_channels():
 @router.get("/country/{country}", response_model=List[Channel])
 def get_channels_by_country(country: str):
     """
-    WHY THIS FUNCTION EXISTS:
+    PURPOSE:
     - Filters channels by country
-    - Case-insensitive
-    - Automatically protected by API key
+    - Case-insensitive comparison
     """
-    country_lower = country.lower()
 
-    # Filter channels that match the country
     return [
-        channel for channel in channels_data
-        if channel["country"].lower() == country_lower
+        channel
+        for channel in channels_data
+        if channel["country"].lower() == country.lower()
     ]
+
 
 # -----------------------------
 # ENDPOINT: GET CHANNELS BY CATEGORY
@@ -80,70 +83,73 @@ def get_channels_by_country(country: str):
 @router.get("/category/{category}", response_model=List[Channel])
 def get_channels_by_category(category: str):
     """
-    WHY THIS FUNCTION EXISTS:
-    - Returns channels filtered by category
-    - Case-insensitive
-    - Automatically protected by API key
+    PURPOSE:
+    - Filters channels by category
+    - Case-insensitive comparison
     """
-    category_lower = category.lower()
 
-    # Filter channels that match the category
     return [
-        channel for channel in channels_data
-        if channel["category"].lower() == category_lower
+        channel
+        for channel in channels_data
+        if channel["category"].lower() == category.lower()
     ]
 
+
 # -----------------------------
-# ENDPOINT: GET CHANNELS BY LANGUAGE
+# ENDPOINT: GET CHANNELS BY LANGUAGE (DB VERSION)
 # -----------------------------
 @router.get("/language/{language}", response_model=List[Channel])
 def get_channels_by_language_endpoint(language: str):
     """
-    WHY THIS FUNCTION EXISTS:
-    - Returns channels filtered by language
-    - Case-insensitive
-    - Automatically protected by API key
+    PURPOSE:
+    - Retrieves channels from database
+    - Uses CRUD layer (clean architecture)
     """
-    # Call the CRUD function that queries the database for channels by language
+
     return get_channels_by_language(language)
 
+
 # -----------------------------
-# ENDPOINT: CREATE CHANNEL (VALIDATE STREAM URL FIRST)
+# ENDPOINT: CREATE NEW CHANNEL
 # -----------------------------
-@router.post(
-    "/",
-    response_model=Channel,
-    dependencies=[Depends(verify_api_key)]
-)
+@router.post("/", response_model=Channel)
 def create_channel(channel: Channel):
     """
-    WHY THIS FUNCTION EXISTS:
-    - Adds a new channel after validating stream URL
-    - Interview gold: “We validate external resources before persistence.”
+    PURPOSE:
+    - Adds a new channel
+    - Validates external stream before saving
+    - Demonstrates defensive programming
     """
-    # Validate that the stream URL is reachable
+
+    # Validate stream URL before saving
     if not validate_stream(channel.stream_url):
         raise HTTPException(
             status_code=400,
             detail="Stream URL is not reachable"
         )
 
-    # Add channel to the database
+    # Persist channel using CRUD layer
     add_channel(channel)
 
     return channel
+
 
 # -----------------------------
 # UTILITY: STREAM URL VALIDATION
 # -----------------------------
 def validate_stream(url: str) -> bool:
     """
-    WHY THIS FUNCTION EXISTS:
-    - Confirms that external stream URL is reachable
-    - Prevents saving broken or invalid streams to DB
+    PURPOSE:
+    - Sends HTTP HEAD request
+    - Ensures stream is reachable
+    - Prevents saving broken streams
     """
+
     try:
-        response = requests.head(url, timeout=5)
-        return response.status_code == 200
-    except Exception:
+        response = requests.head(str(url), timeout=5)
+
+        # Accept any 2xx success code
+        return 200 <= response.status_code < 300
+
+    except requests.RequestException:
         return False

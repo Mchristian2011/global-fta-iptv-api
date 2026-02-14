@@ -1,17 +1,34 @@
-from fastapi import Header, HTTPException  # For reading headers and returning errors
+# app/core/security.py
 
-# Define valid API keys
+import os
+from fastapi import Header, HTTPException
+
+# ---------------------------------------
+# LOAD API KEYS FROM ENVIRONMENT
+# ---------------------------------------
+FREE_KEY = os.getenv("FREE_API_KEY")
+PRO_KEY = os.getenv("PRO_API_KEY")
+
 VALID_API_KEYS = {
-    "FREE123": "free",  # Free tier
-    "PRO456": "pro"     # Paid tier
+    FREE_KEY: "free",
+    PRO_KEY: "pro"
 }
 
-# Dependency to check API key
-def verify_api_key(x_api_key: str = Header(...)):
+# ---------------------------------------
+# DEPENDENCY FUNCTION
+# ---------------------------------------
+def verify_api_key(x_api_key: str = Header(None)):
     """
-    FastAPI dependency that checks if the client sent a valid API key.
-    If invalid, it raises a 401 error.
+    PURPOSE:
+    - Extracts X-API-Key header
+    - Validates access
+    - Returns subscription tier
     """
-    if x_api_key not in VALID_API_KEYS:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return x_api_key  # Return valid key
+
+    if not x_api_key or x_api_key not in VALID_API_KEYS:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key"
+        )
+
+    return VALID_API_KEYS[x_api_key]

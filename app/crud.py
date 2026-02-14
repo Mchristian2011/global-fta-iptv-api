@@ -1,35 +1,53 @@
 from sqlalchemy.orm import Session
-from app.models import Channel
+from sqlalchemy.exc import SQLAlchemyError
+from app.models.channel import Channel
 from app.database import ChannelDB, SessionLocal
+
 
 # -----------------------------
 # Add a channel
 # -----------------------------
 def add_channel(channel: Channel):
     """
-    Adds a new channel to the database.
-    - Checks first to avoid duplicates (based on channel.id)
+    PURPOSE:
+    - Adds a new channel to the database
+    - Prevents duplicate IDs
+    - Uses defensive database handling
     """
+
     db = SessionLocal()
 
-    # ✅ CHECK FIRST: prevent duplicate insert
-    existing = db.query(ChannelDB).filter(ChannelDB.id == channel.id).first()
-    if existing:
+    try:
+        # 🔍 Check if channel already exists
+        existing = (
+            db.query(ChannelDB)
+            .filter(ChannelDB.id == channel.id)
+            .first()
+        )
+
+        if existing:
+            return  # Already exists, silently ignore
+
+        # 🆕 Create new DB object
+        db_channel = ChannelDB(
+            id=channel.id,
+            name=channel.name,
+            country=channel.country,
+            language=channel.language,
+            category=channel.category,
+            stream_url=channel.stream_url,
+            is_active=channel.is_active
+        )
+
+        db.add(db_channel)
+        db.commit()
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise
+
+    finally:
         db.close()
-        return  # Channel already exists
-    
-    db_channel = ChannelDB(
-        id=channel.id,
-        name=channel.name,
-        country=channel.country,
-        language=channel.language,
-        category=channel.category,
-        stream_url=channel.stream_url,
-        is_active=channel.is_active
-    )
-    db.add(db_channel)
-    db.commit()
-    db.close()
 
 
 # -----------------------------
@@ -37,12 +55,16 @@ def add_channel(channel: Channel):
 # -----------------------------
 def get_all_channels():
     """
-    Returns all channels in the database.
+    PURPOSE:
+    - Returns all channels in the database
     """
+
     db = SessionLocal()
-    channels = db.query(ChannelDB).all()
-    db.close()
-    return channels
+
+    try:
+        return db.query(ChannelDB).all()
+    finally:
+        db.close()
 
 
 # -----------------------------
@@ -50,14 +72,21 @@ def get_all_channels():
 # -----------------------------
 def get_channels_by_country(country: str):
     """
-    Filters channels by country (case-insensitive)
+    PURPOSE:
+    - Filters channels by country
+    - Case-insensitive match
     """
+
     db = SessionLocal()
-    channels = db.query(ChannelDB)\
-        .filter(ChannelDB.country.ilike(country))\
-        .all()
-    db.close()
-    return channels
+
+    try:
+        return (
+            db.query(ChannelDB)
+            .filter(ChannelDB.country.ilike(f"%{country}%"))
+            .all()
+        )
+    finally:
+        db.close()
 
 
 # -----------------------------
@@ -65,12 +94,18 @@ def get_channels_by_country(country: str):
 # -----------------------------
 def get_channels_by_language(language: str):
     """
-    Filters channels by language (case-insensitive)
+    PURPOSE:
+    - Filters channels by language
+    - Case-insensitive match
     """
+
     db = SessionLocal()
-    # Use ilike for case-insensitive matching
-    channels = db.query(ChannelDB)\
-        .filter(ChannelDB.language.ilike(language))\
-        .all()
-    db.close()
-    return channels
+
+    try:
+        return (
+            db.query(ChannelDB)
+            .filter(ChannelDB.language.ilike(f"%{language}%"))
+            .all()
+        )
+    finally:
+        d
